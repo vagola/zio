@@ -1,7 +1,6 @@
 package zio
 
 import cats.effect.implicits._
-import cats.effect.unsafe.implicits.global
 import cats.effect.{IO => CIO}
 import cats.implicits._
 import org.openjdk.jmh.annotations._
@@ -20,51 +19,51 @@ import scala.concurrent.{Await, Future}
 @OutputTimeUnit(TimeUnit.SECONDS)
 class CollectAllBenchmark {
 
-  @Param(Array("100", "1000"))
+  @Param(Array("10", "100"))
   var count: Int = 100
 
-  val parallelism: Int = 10
+  val parallelism: Int = java.lang.Runtime.getRuntime.availableProcessors
 
   @Benchmark
   def catsCollectAll(): Long = {
     val tasks  = (0 until count).map(_ => CIO(1)).toList
     val result = tasks.sequence.map(_.sum.toLong)
-    result.unsafeRunSync()
+    runCatsEffect3(result)
   }
 
   @Benchmark
   def catsCollectAllPar(): Long = {
     val tasks  = (0 until count).map(_ => CIO(1)).toList
     val result = tasks.parSequence.map(_.sum.toLong)
-    result.unsafeRunSync()
+    runCatsEffect3(result)
   }
 
   @Benchmark
   def catsCollectAllParN(): Long = {
     val tasks  = (0 until count).map(_ => CIO(1)).toList
     val result = tasks.parSequenceN(parallelism).map(_.sum.toLong)
-    result.unsafeRunSync()
+    runCatsEffect3(result)
   }
 
   @Benchmark
   def zioCollectAll(): Long = {
     val tasks  = (0 until count).map(_ => ZIO.succeed(1)).toList
     val result = ZIO.collectAll(tasks).map(_.sum.toLong)
-    unsafeRun(result)
+    runZio(result)
   }
 
   @Benchmark
   def zioCollectAllPar(): Long = {
     val tasks  = (0 until count).map(_ => ZIO.succeed(1)).toList
     val result = ZIO.collectAllPar(tasks).map(_.sum.toLong)
-    unsafeRun(result)
+    runZio(result)
   }
 
   @Benchmark
   def zioCollectAllParN(): Long = {
     val tasks  = (0 until count).map(_ => ZIO.succeed(1)).toList
     val result = ZIO.collectAllParN(parallelism)(tasks).map(_.sum.toLong)
-    unsafeRun(result)
+    runZio(result)
   }
 
   @Benchmark

@@ -1,33 +1,29 @@
 package zio
 
-import cats._
-import cats.effect.{Fiber => CFiber, IO => CIO}
+import cats.effect.{IO => CIO}
 import zio.internal._
 
 import scala.concurrent.ExecutionContext
 
 object BenchmarkUtil extends Runtime[ZEnv] {
-  val environment   = Runtime.default.environment
-  val runtimeConfig = RuntimeConfig.benchmark
 
-  val TracedRuntime: Runtime[ZEnv] = Runtime(environment, RuntimeConfig.benchmark.copy(tracing = Tracing.enabled))
+  val catsEffectRuntime = cats.effect.unsafe.implicits.global
 
-  implicit val futureExecutionContext: ExecutionContext =
-    ExecutionContext.global
+  val environment = Runtime.default.environment
+  val runtimeConfig = RuntimeConfig
+    .makeDefault(1024)
+    .withTracing(Tracing.disabled)
 
-  def repeat[R, E, A](n: Int)(zio: ZIO[R, E, A]): ZIO[R, E, A] =
-    if (n <= 1) zio
-    else zio *> repeat(n - 1)(zio)
-
-  def verify(cond: Boolean)(message: => String): IO[AssertionError, Unit] =
-    ZIO.when(!cond)(IO.fail(new AssertionError(message))).unit
-
-  def catsForeach[A, B](as: List[A])(f: A => CIO[B]): CIO[List[B]] =
-    Traverse[List].traverse(as)(f)
-
-  def catsForkAll[A](as: Iterable[CIO[A]]): CIO[CFiber[CIO, Throwable, List[A]]] = ???
+  implicit val futureExecutionContext: ExecutionContext = ExecutionContext.global
 
   def catsRepeat[A](n: Int)(io: CIO[A]): CIO[A] =
     if (n <= 1) io
     else io.flatMap(_ => catsRepeat(n - 1)(io))
+
+  def runCatsEffect3[A](io: cats.effect.IO[A]): A =
+    (CIO.cede.flatMap(_ => io)).unsafeRunSync()(catsEffectRuntime)
+
+  def runZio[E, A](zio: => ZIO[Any, E, A]): A =
+    unsafeRun(ZIO.yieldNow.flatMap(_ => zio))
+
 }

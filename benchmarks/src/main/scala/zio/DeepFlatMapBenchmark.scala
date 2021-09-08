@@ -1,6 +1,5 @@
 package zio
 
-import cats.effect.unsafe.implicits.global
 import org.openjdk.jmh.annotations._
 import zio.BenchmarkUtil._
 
@@ -10,8 +9,8 @@ import scala.concurrent.Await
 @State(Scope.Thread)
 @BenchmarkMode(Array(Mode.Throughput))
 @OutputTimeUnit(TimeUnit.SECONDS)
-class BroadFlatMapBenchmark {
-  @Param(Array("20"))
+class DeepFlatMapBenchmark {
+  @Param(Array("3", "10"))
   var depth: Int = _
 
   @Benchmark
@@ -28,69 +27,13 @@ class BroadFlatMapBenchmark {
   }
 
   @Benchmark
-  def completableFutureBroadFlatMap(): BigInt = {
-    import java.util.concurrent.CompletableFuture
-
-    def fib(n: Int): CompletableFuture[BigInt] =
-      if (n <= 1) CompletableFuture.completedFuture(n)
-      else
-        fib(n - 1).thenCompose(a => fib(n - 2).thenCompose(b => CompletableFuture.completedFuture(a + b)))
-
-    fib(depth)
-      .get()
-  }
-
-  @Benchmark
-  def monoBroadFlatMap(): BigInt = {
-    import reactor.core.publisher.Mono
-
-    def fib(n: Int): Mono[BigInt] =
-      if (n <= 1) Mono.fromSupplier(() => n)
-      else
-        fib(n - 1).flatMap(a => fib(n - 2).flatMap(b => Mono.fromSupplier(() => a + b)))
-
-    fib(depth)
-      .block()
-  }
-
-  @Benchmark
-  def rxSingleBroadFlatMap(): BigInt = {
-    import io.reactivex.Single
-
-    def fib(n: Int): Single[BigInt] =
-      if (n <= 1) Single.fromCallable(() => n)
-      else
-        fib(n - 1).flatMap(a => fib(n - 2).flatMap(b => Single.fromCallable(() => a + b)))
-
-    fib(depth)
-      .blockingGet()
-  }
-
-  @Benchmark
-  def twitterBroadFlatMap(): BigInt = {
-    import com.twitter.util.{Await, Future}
-
-    def fib(n: Int): Future[BigInt] =
-      if (n <= 1) Future(n)
-      else
-        fib(n - 1).flatMap(a => fib(n - 2).flatMap(b => Future(a + b)))
-
-    Await.result(fib(depth))
-  }
-
-  @Benchmark
-  def zioBroadFlatMap(): BigInt = zioBroadFlatMap(BenchmarkUtil)
-
-  @Benchmark
-  def zioTracedBroadFlatMap(): BigInt = zioBroadFlatMap(TracedRuntime)
-
-  private[this] def zioBroadFlatMap(runtime: Runtime[Any]): BigInt = {
+  def zioBroadFlatMap(): BigInt = {
     def fib(n: Int): UIO[BigInt] =
       if (n <= 1) ZIO.succeed[BigInt](n)
       else
         fib(n - 1).flatMap(a => fib(n - 2).flatMap(b => ZIO.succeed(a + b)))
 
-    runtime.unsafeRun(fib(depth))
+    runZio(fib(depth))
   }
 
   @Benchmark
@@ -102,6 +45,6 @@ class BroadFlatMapBenchmark {
       else
         fib(n - 1).flatMap(a => fib(n - 2).flatMap(b => IO(a + b)))
 
-    fib(depth).unsafeRunSync()
+    runCatsEffect3(fib(depth))
   }
 }
